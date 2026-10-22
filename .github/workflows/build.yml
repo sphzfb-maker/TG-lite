@@ -1,0 +1,70 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore TDLib build cache
+        id: tdcache
+        uses: actions/cache@v4
+        with:
+          path: tdlib-out
+          key: tdlib-v1-${{ hashFiles('.github/workflows/build.yml') }}
+
+      - name: Get TDLib source
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          path: td-src
+
+      - name: Build TDLib (30-40 min, only the first time)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          cd td-src/example/android
+          docker build --output "$GITHUB_WORKSPACE/tdlib-out" .
+
+      - name: Copy TDLib into app
+        run: |
+          set -e
+          echo "---- tdlib-out contents ----"
+          find tdlib-out -maxdepth 5 | head -60
+          TDAPI=$(find tdlib-out -name TdApi.java | head -1)
+          CLIENT=$(find tdlib-out -name Client.java | head -1)
+          SO=$(find tdlib-out -path '*armeabi-v7a*' -name 'libtdjni.so' | head -1)
+          [ -n "$TDAPI" ] && [ -n "$CLIENT" ] && [ -n "$SO" ] || { echo "TDLib output files not found"; exit 1; }
+          grep -m1 '^package' "$TDAPI"
+          grep -q '^package org.drinkless.tdlib;' "$TDAPI" || { echo "Unexpected TDLib package name"; exit 1; }
+          mkdir -p app/src/main/java/org/drinkless/tdlib app/src/main/jniLibs/armeabi-v7a
+          cp "$TDAPI" "$CLIENT" app/src/main/java/org/drinkless/tdlib/
+          cp "$(dirname "$SO")"/*.so app/src/main/jniLibs/armeabi-v7a/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build APK
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: gradle :app:assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tg-lite-apk
+          path: app/build/outputs/apk/release/*.apk
