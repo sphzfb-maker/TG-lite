@@ -1,1 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
 
+android {
+    namespace 'com.phsuvo.tg'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.phsuvo.tg'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '0.1'
+
+        ndk { abiFilters 'armeabi-v7a' }
+
+        def apiId = (System.getenv('TG_API_ID') ?: '0').trim()
+        def apiHash = (System.getenv('TG_API_HASH') ?: '').trim()
+        buildConfigField 'int', 'TG_API_ID', apiId
+        buildConfigField 'String', 'TG_API_HASH', "\"${apiHash}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
