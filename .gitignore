@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+tdlib-out/
+td-src/
+app/src/main/jniLibs/
+app/src/main/java/org/drinkless/
